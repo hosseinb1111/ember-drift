@@ -1,0 +1,1069 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ember Drift</title>
+<style>
+  :root {
+    --bg: #090c12;
+    --panel: rgba(14, 18, 27, 0.72);
+    --panel-border: rgba(255, 255, 255, 0.08);
+    --text: #e8ecf3;
+    --text-dim: #7a8399;
+    --accent: #ff8a5c;
+    --ui-font: 'Söhne', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  html, body {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: var(--bg);
+  }
+  body {
+    font-family: var(--ui-font);
+    color: var(--text);
+    -webkit-tap-highlight-color: transparent;
+    cursor: none;
+    transition: background 0.5s ease;
+  }
+  canvas {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw;
+    height: 100%;
+    display: block;
+    touch-action: none;
+  }
+  #stars { z-index: 1; }
+  #c { z-index: 2; }
+  #fx { z-index: 3; pointer-events: none; }
+  #flash {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 4;
+    pointer-events: none;
+    opacity: 0;
+    mix-blend-mode: screen;
+  }
+  .credit {
+    position: fixed;
+    top: calc(18px + env(safe-area-inset-top, 0px));
+    left: 20px;
+    font-size: 13px;
+    letter-spacing: 0.02em;
+    color: var(--text-dim);
+    font-family: Georgia, 'Times New Roman', serif;
+    font-style: italic;
+    pointer-events: none;
+    user-select: none;
+    opacity: 0.85;
+    z-index: 5;
+    transition: font-family 0.3s ease;
+  }
+  .credit b {
+    color: var(--text);
+    font-style: normal;
+    font-weight: 500;
+  }
+  body.theme-binary .credit {
+    font-family: 'Courier New', ui-monospace, monospace;
+    font-style: normal;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 12px;
+  }
+  .hint {
+    position: fixed;
+    top: calc(18px + env(safe-area-inset-top, 0px));
+    right: 20px;
+    font-size: 12px;
+    color: var(--text-dim);
+    pointer-events: none;
+    user-select: none;
+    transition: opacity 1.2s ease;
+    z-index: 5;
+    text-align: right;
+  }
+  body.theme-binary .hint { font-family: ui-monospace, 'Courier New', monospace; }
+  .quality-note {
+    position: fixed;
+    bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    color: var(--text-dim);
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    padding: 6px 12px;
+    border-radius: 10px;
+    opacity: 0;
+    transition: opacity 0.6s ease;
+    pointer-events: none;
+    z-index: 5;
+    white-space: nowrap;
+  }
+  .quality-note.show { opacity: 1; }
+  .dock {
+    position: fixed;
+    bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 8px;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 16px;
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    z-index: 10;
+    max-width: calc(100vw - 24px);
+    cursor: auto;
+    transition: border-radius 0.3s ease;
+  }
+  body.theme-binary .dock {
+    border-radius: 4px;
+    font-family: ui-monospace, 'Courier New', monospace;
+  }
+  .swatch-group {
+    display: flex;
+    gap: 6px;
+    padding: 0 8px;
+    border-right: 1px solid var(--panel-border);
+    margin-right: 4px;
+  }
+  .swatch {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    padding: 0;
+    position: relative;
+    transition: transform 0.15s ease, border-color 0.15s ease, border-radius 0.3s ease;
+  }
+  body.theme-binary .swatch { border-radius: 3px; }
+  .swatch:hover { transform: scale(1.1); }
+  .swatch.active {
+    border-color: rgba(255,255,255,0.85);
+    transform: scale(1.08);
+  }
+  .swatch.active::after {
+    content: '';
+    position: absolute;
+    inset: -5px;
+    border-radius: inherit;
+    border: 1px solid rgba(255,255,255,0.3);
+  }
+  .theme-group {
+    display: flex;
+    gap: 6px;
+    padding: 0 8px;
+    border-right: 1px solid var(--panel-border);
+    margin-right: 4px;
+  }
+  .theme-swatch {
+    width: 30px;
+    height: 26px;
+    border-radius: 8px;
+    border: 1.5px solid var(--panel-border);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    transition: border-color 0.15s ease, transform 0.15s ease;
+    background: rgba(255,255,255,0.03);
+  }
+  .theme-swatch:hover { transform: translateY(-1px); }
+  .theme-swatch.active {
+    border-color: var(--accent);
+  }
+  .btn {
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    width: 38px;
+    height: 38px;
+    border-radius: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, border-radius 0.3s ease;
+  }
+  body.theme-binary .btn { border-radius: 3px; }
+  .btn:hover {
+    background: rgba(255,255,255,0.07);
+    color: var(--text);
+  }
+  .btn:active { transform: scale(0.94); }
+  .btn.on {
+    color: var(--accent);
+    background: rgba(255, 138, 92, 0.12);
+  }
+  .btn svg { width: 17px; height: 17px; }
+
+  #cursor {
+    position: fixed;
+    top: 0; left: 0;
+    width: 0; height: 0;
+    pointer-events: none;
+    z-index: 100;
+    will-change: transform;
+  }
+  #cursor .core {
+    position: absolute;
+    top: -3px; left: -3px;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--cursor-color, #ff8a5c);
+    box-shadow: 0 0 8px 2px var(--cursor-color, #ff8a5c);
+  }
+  #cursor .ring {
+    position: absolute;
+    top: -16px; left: -16px;
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    border: 1.5px solid var(--cursor-color, #ff8a5c);
+    opacity: 0.55;
+    will-change: transform;
+  }
+  #cursor .ring2 {
+    position: absolute;
+    top: -26px; left: -26px;
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    border: 1px solid var(--cursor-color, #ff8a5c);
+    opacity: 0.22;
+  }
+  body.theme-binary #cursor .core,
+  body.theme-binary #cursor .ring,
+  body.theme-binary #cursor .ring2 {
+    border-radius: 0;
+  }
+  @media (hover: none) {
+    #cursor { display: none; }
+    body { cursor: auto; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .credit, .hint, .quality-note { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="stars"></canvas>
+<canvas id="c"></canvas>
+<canvas id="fx"></canvas>
+<canvas id="flash"></canvas>
+<div class="credit" id="creditText">Ember Drift <b>·</b> a field of light</div>
+<div class="hint" id="hint">move to bend the current<br>click for a burst</div>
+<div class="quality-note" id="qualityNote"></div>
+
+<div id="cursor">
+  <div class="ring2"></div>
+  <div class="ring" id="cursorRing"></div>
+  <div class="core"></div>
+</div>
+
+<div class="dock">
+  <div class="theme-group" id="themes"></div>
+  <div class="swatch-group" id="swatches"></div>
+  <button class="btn" id="densityBtn" title="Cycle density" aria-label="Cycle particle density">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="6" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="7" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="17" r="1.4" fill="currentColor" stroke="none"/><circle cx="18" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="18" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="6" cy="18" r="1.4" fill="currentColor" stroke="none"/></svg>
+  </button>
+  <button class="btn" id="modeBtn" title="Toggle attract / repel" aria-label="Toggle attract or repel">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 4v16M6 9l6-5 6 5" id="arrowPath"/></svg>
+  </button>
+  <button class="btn" id="starsBtn" title="Toggle shooting stars" aria-label="Toggle shooting stars">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M19 13v4M17 15h4"/><path d="M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4L12 3z"/></svg>
+  </button>
+  <button class="btn" id="trailBtn" title="Toggle cursor trail" aria-label="Toggle cursor trail">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="5" cy="19" r="1.3" fill="currentColor" stroke="none" opacity="0.4"/><circle cx="10" cy="14" r="1.6" fill="currentColor" stroke="none" opacity="0.7"/><circle cx="16" cy="8" r="2" fill="currentColor" stroke="none"/></svg>
+  </button>
+  <button class="btn" id="qualityBtn" title="Cycle quality (Auto)" aria-label="Cycle render quality">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3v3M12 18v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M3 12h3M18 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
+  </button>
+  <button class="btn" id="pauseBtn" title="Pause" aria-label="Pause animation">
+    <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+  </button>
+</div>
+
+<script>
+(function() {
+  "use strict";
+
+  // =========================================================================
+  // CONFIG
+  // =========================================================================
+  const CONFIG = {
+    quality: 'auto',
+    dprCap: 2,
+    densityLevels: [900, 1500, 2200, 450],
+    densityIndex: 1,
+    trailLenByQuality: { high: 16, medium: 10, low: 6 },
+    starCountByQuality: { high: 5, medium: 3, low: 2 },
+    bgStarCountByQuality: { high: 140, medium: 80, low: 40 },
+    sparkCountByQuality: { high: 34, medium: 20, low: 10 },
+    cursorTrailByQuality: { high: 14, medium: 8, low: 0 },
+    fieldScale: 0.0028,
+    pointerRadius: 260,
+    pointerForce: 2.4,
+  };
+
+  let currentTier = 'high';
+
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d', { alpha: false });
+  const fxCanvas = document.getElementById('fx');
+  const fxCtx = fxCanvas.getContext('2d');
+  const starsCanvas = document.getElementById('stars');
+  const starsCtx = starsCanvas.getContext('2d');
+  const flashCanvas = document.getElementById('flash');
+  const flashCtx = flashCanvas.getContext('2d');
+  const hint = document.getElementById('hint');
+  const creditText = document.getElementById('creditText');
+  const qualityNote = document.getElementById('qualityNote');
+  const cursorEl = document.getElementById('cursor');
+  const cursorRing = document.getElementById('cursorRing');
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const isTouch = window.matchMedia('(hover: none)').matches;
+
+  // =========================================================================
+  // THEMES — each theme owns a palette set, background, cursor color, glyph
+  // mode (dots vs falling characters), and its own copy/credit line. Palette
+  // colors within a theme are multi-selectable: the active particle mix
+  // draws only from the swatches the user has toggled on.
+  // =========================================================================
+  const THEMES = {
+    ember: {
+      label: 'Ember',
+      icon: '\u2726',
+      bg: '#090c12',
+      uiFont: "'Söhne', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+      creditFont: "Georgia, 'Times New Roman', serif",
+      credit: 'Ember Drift <b>·</b> a field of light',
+      hint: 'move to bend the current<br>click for a burst',
+      glyphMode: 'dot',
+      palette: [
+        { hex: '#ff8a5c', name: 'ember' },
+        { hex: '#ffb84d', name: 'spark' },
+        { hex: '#ff5c7a', name: 'rose' },
+        { hex: '#4dd4ff', name: 'glacier' },
+        { hex: '#5cffb0', name: 'aurora' },
+        { hex: '#a78bfa', name: 'violet' }
+      ],
+      defaultSelection: [0, 1, 2],
+      cursorShape: 'round'
+    },
+    binary: {
+      label: 'Binary',
+      icon: '01',
+      bg: '#000000',
+      uiFont: "ui-monospace, 'Courier New', monospace",
+      creditFont: "ui-monospace, 'Courier New', monospace",
+      credit: 'BINARY_DRIFT <b>//</b> v1.0',
+      hint: 'move to disrupt the stream<br>click to inject',
+      glyphMode: 'glyph',
+      palette: [
+        { hex: '#00ff6a', name: 'matrix' },
+        { hex: '#39ff14', name: 'neon' },
+        { hex: '#00ffcc', name: 'cyan' },
+        { hex: '#ffffff', name: 'white' }
+      ],
+      defaultSelection: [0, 1],
+      cursorShape: 'square'
+    }
+  };
+  let themeKey = 'ember';
+  let selectedColorIdx = new Set(THEMES.ember.defaultSelection);
+
+  function theme() { return THEMES[themeKey]; }
+  function activeColors() {
+    const t = theme();
+    const idxs = [...selectedColorIdx];
+    if (idxs.length === 0) return [t.palette[0].hex];
+    return idxs.map(i => t.palette[i].hex);
+  }
+
+  // ---- State ----
+  let W, H, DPR;
+  let particles = [];
+  let mode = 1;
+  let paused = false;
+  let starsOn = true;
+  let cursorTrailOn = true;
+  let pointer = { x: -9999, y: -9999, active: false };
+  let time = 0;
+  let animId = null;
+  let bursts = [];
+  let sparks = [];
+  let stars = [];
+  let bgStars = [];
+  let cursorTrail = [];
+  const GLYPHS = '01';
+
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, CONFIG.dprCap);
+    W = window.innerWidth;
+    H = window.innerHeight;
+    [canvas, fxCanvas, starsCanvas, flashCanvas].forEach(cv => {
+      cv.width = W * DPR;
+      cv.height = H * DPR;
+      cv.style.width = W + 'px';
+      cv.style.height = H + 'px';
+    });
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    fxCtx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    starsCtx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    flashCtx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+
+  // ---- Noise ----
+  const NOISE_SIZE = 256;
+  const noiseGrad = new Float32Array(NOISE_SIZE * NOISE_SIZE * 2);
+  (function seedNoise() {
+    for (let i = 0; i < NOISE_SIZE * NOISE_SIZE; i++) {
+      const a = Math.random() * Math.PI * 2;
+      noiseGrad[i * 2] = Math.cos(a);
+      noiseGrad[i * 2 + 1] = Math.sin(a);
+    }
+  })();
+  function fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+  function lerp(a, b, t) { return a + t * (b - a); }
+  function dotGrid(ix, iy, x, y) {
+    ix = ((ix % NOISE_SIZE) + NOISE_SIZE) % NOISE_SIZE;
+    iy = ((iy % NOISE_SIZE) + NOISE_SIZE) % NOISE_SIZE;
+    const idx = (iy * NOISE_SIZE + ix) * 2;
+    const gx = noiseGrad[idx], gy = noiseGrad[idx + 1];
+    const dx = x - ix, dy = y - iy;
+    return dx * gx + dy * gy;
+  }
+  function perlin(x, y) {
+    const x0 = Math.floor(x), y0 = Math.floor(y);
+    const x1 = x0 + 1, y1 = y0 + 1;
+    const sx = fade(x - x0), sy = fade(y - y0);
+    const n0 = dotGrid(x0, y0, x, y);
+    const n1 = dotGrid(x1, y0, x, y);
+    const ix0 = lerp(n0, n1, sx);
+    const m0 = dotGrid(x0, y1, x, y);
+    const m1 = dotGrid(x1, y1, x, y);
+    const ix1 = lerp(m0, m1, sx);
+    return lerp(ix0, ix1, sy);
+  }
+  function fieldAngle(x, y, t) {
+    const s = CONFIG.fieldScale;
+    const n = perlin(x * s, y * s + t * 0.06) + perlin(x * s * 2.1 + 40, y * s * 2.1 + t * 0.03);
+    return n * Math.PI * 2.2;
+  }
+  function hexToRgbString(hex) {
+    const v = hex.replace('#', '');
+    const r = parseInt(v.substring(0, 2), 16);
+    const g = parseInt(v.substring(2, 4), 16);
+    const b = parseInt(v.substring(4, 6), 16);
+    return `rgb(${r}, ${g}, ${b})`;
+  }
+
+  // ---- Particles ----
+  class Particle {
+    constructor() { this.reset(true); }
+    reset(initial) {
+      this.x = Math.random() * W;
+      this.y = Math.random() * H;
+      this.life = Math.random() * 200 + 60;
+      this.maxLife = this.life;
+      this.speed = Math.random() * 0.6 + 0.5;
+      this.hueShift = Math.random();
+      this.size = Math.random() * 1.3 + 0.5;
+      this.glyph = GLYPHS[Math.floor(Math.random() * GLYPHS.length)];
+      this.glyphFlipAt = Math.floor(Math.random() * 40) + 20;
+      if (!initial) { this.life = this.maxLife; }
+      this.trail = [];
+      this.kickVx = 0;
+      this.kickVy = 0;
+    }
+    step() {
+      let angle = fieldAngle(this.x, this.y, time);
+      let vx = Math.cos(angle) * this.speed;
+      let vy = Math.sin(angle) * this.speed;
+
+      if (pointer.active) {
+        const dx = this.x - pointer.x;
+        const dy = this.y - pointer.y;
+        const distSq = dx * dx + dy * dy;
+        const radius = CONFIG.pointerRadius;
+        if (distSq < radius * radius) {
+          const dist = Math.sqrt(distSq) || 1;
+          const force = (1 - dist / radius) * CONFIG.pointerForce * mode;
+          vx += (-dy / dist) * force + (dx / dist) * force * 0.35 * mode;
+          vy += (dx / dist) * force + (dy / dist) * force * 0.35 * mode;
+        }
+      }
+
+      for (let i = 0; i < bursts.length; i++) {
+        const b = bursts[i];
+        const dx = this.x - b.x;
+        const dy = this.y - b.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const ringDist = Math.abs(dist - b.radius);
+        if (ringDist < 60) {
+          const push = (1 - ringDist / 60) * b.strength;
+          this.kickVx += (dx / dist) * push;
+          this.kickVy += (dy / dist) * push;
+        }
+      }
+
+      vx += this.kickVx;
+      vy += this.kickVy;
+      this.kickVx *= 0.9;
+      this.kickVy *= 0.9;
+
+      this.x += vx;
+      this.y += vy;
+      this.life -= 1;
+
+      if (time % this.glyphFlipAt === 0 && Math.random() < 0.3) {
+        this.glyph = GLYPHS[Math.floor(Math.random() * GLYPHS.length)];
+      }
+
+      const maxTrail = CONFIG.trailLenByQuality[currentTier] * 2;
+      this.trail.push(this.x, this.y);
+      if (this.trail.length > maxTrail) this.trail.splice(0, 2);
+
+      if (this.x < -20 || this.x > W + 20 || this.y < -20 || this.y > H + 20 || this.life <= 0) {
+        this.reset(false);
+      }
+    }
+    draw(colors, glyphMode) {
+      if (this.trail.length < 4) return;
+      const lifeRatio = this.life / this.maxLife;
+      const alpha = Math.min(1, lifeRatio * 3) * Math.min(1, (this.maxLife - this.life) / 20) * 0.85;
+      const colorIdx = Math.floor(this.hueShift * colors.length) % colors.length;
+      const color = colors[colorIdx];
+
+      if (glyphMode === 'glyph') {
+        ctx.globalAlpha = alpha * 0.35;
+        ctx.fillStyle = color;
+        ctx.font = `${9 + this.size * 3}px ui-monospace, 'Courier New', monospace`;
+        for (let i = 0; i < this.trail.length; i += 6) {
+          ctx.globalAlpha = alpha * 0.22 * (i / this.trail.length);
+          ctx.fillText(this.glyph, this.trail[i], this.trail[i + 1]);
+        }
+        ctx.globalAlpha = alpha;
+        ctx.fillText(this.glyph, this.x, this.y);
+        return;
+      }
+
+      ctx.beginPath();
+      ctx.moveTo(this.trail[0], this.trail[1]);
+      for (let i = 2; i < this.trail.length; i += 2) {
+        ctx.lineTo(this.trail[i], this.trail[i + 1]);
+      }
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = alpha * 0.55;
+      ctx.lineWidth = this.size;
+      ctx.stroke();
+
+      ctx.globalAlpha = alpha;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.size * 0.9, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+    }
+  }
+
+  class Spark {
+    constructor(x, y, color) {
+      const a = Math.random() * Math.PI * 2;
+      const s = Math.random() * 6 + 3;
+      this.x = x; this.y = y;
+      this.vx = Math.cos(a) * s;
+      this.vy = Math.sin(a) * s;
+      this.life = 1;
+      this.decay = Math.random() * 0.02 + 0.018;
+      this.size = Math.random() * 2 + 1;
+      this.color = color;
+    }
+    step() {
+      this.x += this.vx;
+      this.y += this.vy;
+      this.vx *= 0.96;
+      this.vy *= 0.96;
+      this.life -= this.decay;
+    }
+    draw() {
+      if (this.life <= 0) return;
+      fxCtx.globalAlpha = Math.max(0, this.life);
+      fxCtx.beginPath();
+      fxCtx.arc(this.x, this.y, this.size * this.life, 0, Math.PI * 2);
+      fxCtx.fillStyle = this.color;
+      fxCtx.fill();
+    }
+  }
+
+  class Burst {
+    constructor(x, y, color) {
+      this.x = x; this.y = y;
+      this.radius = 4;
+      this.maxRadius = 240;
+      this.strength = 3.2;
+      this.life = 1;
+      this.color = color;
+    }
+    step() {
+      this.radius += (this.maxRadius - this.radius) * 0.09 + 2;
+      this.life -= 0.035;
+    }
+    draw() {
+      if (this.life <= 0) return;
+      fxCtx.globalAlpha = Math.max(0, this.life) * 0.6;
+      fxCtx.beginPath();
+      fxCtx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+      fxCtx.strokeStyle = this.color;
+      fxCtx.lineWidth = 2;
+      fxCtx.stroke();
+    }
+  }
+
+  class ShootingStar {
+    constructor() { this.reset(); }
+    reset() {
+      this.x = Math.random() * W * 1.3 - W * 0.15;
+      this.y = Math.random() * H * 0.5 - 40;
+      const angle = Math.PI * 0.22 + Math.random() * 0.12;
+      this.speed = Math.random() * 7 + 9;
+      this.vx = Math.cos(angle) * this.speed;
+      this.vy = Math.sin(angle) * this.speed;
+      this.len = Math.random() * 80 + 60;
+      this.life = 1;
+      this.delay = Math.random() * 400 + (Math.random() < 0.5 ? 0 : 200);
+      this.active = false;
+    }
+    step() {
+      if (!this.active) {
+        this.delay -= 1;
+        if (this.delay <= 0) this.active = true;
+        return;
+      }
+      this.x += this.vx;
+      this.y += this.vy;
+      this.life -= 0.012;
+      if (this.life <= 0 || this.x > W + 100 || this.y > H + 100) this.reset();
+    }
+    draw(color) {
+      if (!this.active || this.life <= 0) return;
+      const tailX = this.x - this.vx * (this.len / this.speed);
+      const tailY = this.y - this.vy * (this.len / this.speed);
+      const grad = fxCtx.createLinearGradient(this.x, this.y, tailX, tailY);
+      const alpha = Math.min(1, this.life * 2);
+      grad.addColorStop(0, color.replace(')', `, ${alpha})`).replace('rgb', 'rgba'));
+      grad.addColorStop(1, color.replace(')', ', 0)').replace('rgb', 'rgba'));
+      fxCtx.globalAlpha = 1;
+      fxCtx.strokeStyle = grad;
+      fxCtx.lineWidth = 1.6;
+      fxCtx.beginPath();
+      fxCtx.moveTo(this.x, this.y);
+      fxCtx.lineTo(tailX, tailY);
+      fxCtx.stroke();
+      fxCtx.globalAlpha = alpha;
+      fxCtx.beginPath();
+      fxCtx.arc(this.x, this.y, 1.4, 0, Math.PI * 2);
+      fxCtx.fillStyle = '#ffffff';
+      fxCtx.fill();
+    }
+  }
+
+  class BgStar {
+    constructor() {
+      this.x = Math.random() * W;
+      this.y = Math.random() * H;
+      this.r = Math.random() * 1.2 + 0.3;
+      this.baseAlpha = Math.random() * 0.5 + 0.15;
+      this.phase = Math.random() * Math.PI * 2;
+      this.speed = Math.random() * 0.02 + 0.006;
+    }
+  }
+  function initBgStars() {
+    bgStars = [];
+    const count = CONFIG.bgStarCountByQuality[currentTier];
+    for (let i = 0; i < count; i++) bgStars.push(new BgStar());
+  }
+  function drawBgStars() {
+    starsCtx.clearRect(0, 0, W, H);
+    for (let i = 0; i < bgStars.length; i++) {
+      const s = bgStars[i];
+      const twinkle = Math.sin(time * s.speed + s.phase) * 0.5 + 0.5;
+      starsCtx.globalAlpha = s.baseAlpha * (0.4 + twinkle * 0.6);
+      starsCtx.beginPath();
+      starsCtx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      starsCtx.fillStyle = '#ffffff';
+      starsCtx.fill();
+    }
+    starsCtx.globalAlpha = 1;
+  }
+
+  function updateCursorTrail() {
+    if (!cursorTrailOn || !pointer.active || isTouch) return;
+    const maxLen = CONFIG.cursorTrailByQuality[currentTier];
+    if (maxLen <= 0) return;
+    cursorTrail.push({ x: pointer.x, y: pointer.y, life: 1 });
+    if (cursorTrail.length > maxLen) cursorTrail.shift();
+  }
+  function drawCursorTrail(colors) {
+    if (cursorTrail.length < 2) return;
+    for (let i = 0; i < cursorTrail.length; i++) {
+      const p = cursorTrail[i];
+      p.life *= 0.88;
+      const t = i / cursorTrail.length;
+      fxCtx.globalAlpha = p.life * t * 0.5;
+      fxCtx.beginPath();
+      fxCtx.arc(p.x, p.y, 2 + t * 4, 0, Math.PI * 2);
+      fxCtx.fillStyle = colors[i % colors.length];
+      fxCtx.fill();
+    }
+    fxCtx.globalAlpha = 1;
+    cursorTrail = cursorTrail.filter(p => p.life > 0.02);
+  }
+
+  function initParticles() {
+    const target = CONFIG.densityLevels[CONFIG.densityIndex];
+    particles = new Array(target);
+    for (let i = 0; i < target; i++) particles[i] = new Particle();
+  }
+  function initStars() {
+    stars = [];
+    const count = CONFIG.starCountByQuality[currentTier];
+    for (let i = 0; i < count; i++) stars.push(new ShootingStar());
+  }
+
+  // ---- Theme application ----
+  function renderSwatches() {
+    const t = theme();
+    const container = document.getElementById('swatches');
+    container.innerHTML = '';
+    t.palette.forEach((c, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'swatch' + (selectedColorIdx.has(i) ? ' active' : '');
+      btn.style.background = c.hex;
+      btn.setAttribute('aria-label', c.name + (selectedColorIdx.has(i) ? ' (selected)' : ''));
+      btn.title = c.name;
+      btn.addEventListener('click', () => {
+        if (selectedColorIdx.has(i)) {
+          if (selectedColorIdx.size > 1) selectedColorIdx.delete(i);
+        } else {
+          selectedColorIdx.add(i);
+        }
+        renderSwatches();
+      });
+      container.appendChild(btn);
+    });
+  }
+
+  function renderThemes() {
+    const container = document.getElementById('themes');
+    container.innerHTML = '';
+    Object.keys(THEMES).forEach(key => {
+      const t = THEMES[key];
+      const btn = document.createElement('button');
+      btn.className = 'theme-swatch' + (key === themeKey ? ' active' : '');
+      btn.textContent = t.icon;
+      btn.title = t.label;
+      btn.setAttribute('aria-label', t.label + ' theme');
+      btn.addEventListener('click', () => setTheme(key));
+      container.appendChild(btn);
+    });
+  }
+
+  function setTheme(key) {
+    if (!THEMES[key]) return;
+    themeKey = key;
+    const t = THEMES[key];
+    selectedColorIdx = new Set(t.defaultSelection);
+    document.body.classList.toggle('theme-binary', key === 'binary');
+    document.body.style.background = t.bg;
+    document.documentElement.style.setProperty('--cursor-color', t.palette[t.defaultSelection[0]].hex);
+    document.documentElement.style.setProperty('--ui-font', t.uiFont);
+    creditText.innerHTML = t.credit;
+    creditText.style.fontFamily = t.creditFont;
+    hint.innerHTML = t.hint;
+    cursorRing.style.borderRadius = t.cursorShape === 'square' ? '2px' : '50%';
+    document.querySelector('#cursor .core').style.borderRadius = t.cursorShape === 'square' ? '1px' : '50%';
+    document.querySelector('#cursor .ring2').style.borderRadius = t.cursorShape === 'square' ? '2px' : '50%';
+    renderSwatches();
+    renderThemes();
+    buildVignette();
+  }
+
+  let vignetteGradient = null;
+  function buildVignette() {
+    const t = theme();
+    const darkness = t.glyphMode === 'glyph' ? 0.7 : 0.55;
+    const g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.75);
+    g.addColorStop(0, 'rgba(0,0,0,0)');
+    g.addColorStop(1, `rgba(0,0,0,${darkness})`);
+    vignetteGradient = g;
+  }
+
+  // ---- Auto quality ----
+  const perf = { samples: [], lastT: 0, cooldown: 0 };
+  const TIERS = ['high', 'medium', 'low'];
+
+  function applyTier(tier, opts) {
+    opts = opts || {};
+    if (tier === currentTier && !opts.force) return;
+    currentTier = tier;
+    initStars();
+    initBgStars();
+    if (opts.announce) {
+      qualityNote.textContent = CONFIG.quality === 'auto' ? `auto quality: ${tier}` : `quality: ${tier}`;
+      qualityNote.classList.add('show');
+      clearTimeout(applyTier._t);
+      applyTier._t = setTimeout(() => qualityNote.classList.remove('show'), 1800);
+    }
+  }
+
+  function checkPerf(now) {
+    if (CONFIG.quality !== 'auto') return;
+    if (!perf.lastT) { perf.lastT = now; return; }
+    const dt = now - perf.lastT;
+    perf.lastT = now;
+    perf.samples.push(dt);
+    if (perf.samples.length > 90) perf.samples.shift();
+    if (perf.cooldown > 0) { perf.cooldown--; return; }
+    if (perf.samples.length < 60) return;
+    const avg = perf.samples.reduce((a, b) => a + b, 0) / perf.samples.length;
+    const idx = TIERS.indexOf(currentTier);
+    if (avg > 26 && idx < TIERS.length - 1) {
+      applyTier(TIERS[idx + 1], { announce: true });
+      perf.cooldown = 120; perf.samples = [];
+    } else if (avg < 15 && idx > 0) {
+      applyTier(TIERS[idx - 1], { announce: true });
+      perf.cooldown = 120; perf.samples = [];
+    }
+  }
+
+  // ---- Render loop ----
+  function frame(now) {
+    time += 1;
+    checkPerf(now || performance.now());
+
+    const t = theme();
+    const colors = activeColors();
+
+    ctx.fillStyle = t.bg;
+    ctx.globalAlpha = 1;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.globalCompositeOperation = t.glyphMode === 'glyph' ? 'source-over' : 'lighter';
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'center';
+    for (let i = 0; i < particles.length; i++) {
+      particles[i].step();
+      particles[i].draw(colors, t.glyphMode);
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+
+    if (vignetteGradient) {
+      ctx.fillStyle = vignetteGradient;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    drawBgStars();
+
+    fxCtx.clearRect(0, 0, W, H);
+    fxCtx.globalCompositeOperation = 'lighter';
+
+    if (starsOn && t.glyphMode !== 'glyph') {
+      for (let i = 0; i < stars.length; i++) {
+        stars[i].step();
+        stars[i].draw(hexToRgbString(colors[i % colors.length]));
+      }
+    }
+
+    updateCursorTrail();
+    drawCursorTrail(colors);
+
+    for (let i = bursts.length - 1; i >= 0; i--) {
+      bursts[i].step();
+      bursts[i].draw();
+      if (bursts[i].life <= 0) bursts.splice(i, 1);
+    }
+    for (let i = sparks.length - 1; i >= 0; i--) {
+      sparks[i].step();
+      sparks[i].draw();
+      if (sparks[i].life <= 0) sparks.splice(i, 1);
+    }
+
+    fxCtx.globalCompositeOperation = 'source-over';
+    fxCtx.globalAlpha = 1;
+
+    if (!paused) animId = requestAnimationFrame(frame);
+  }
+
+  function start() {
+    if (animId) cancelAnimationFrame(animId);
+    perf.lastT = 0;
+    animId = requestAnimationFrame(frame);
+  }
+
+  function setPointer(x, y) {
+    pointer.x = x;
+    pointer.y = y;
+    pointer.active = true;
+    hint.style.opacity = '0';
+    if (!isTouch) cursorEl.style.transform = `translate(${x}px, ${y}px)`;
+  }
+
+  function triggerChromaticFlash(x, y) {
+    flashCtx.clearRect(0, 0, W, H);
+    let frames = 6;
+    function step() {
+      flashCtx.clearRect(0, 0, W, H);
+      const offset = frames * 1.8;
+      flashCtx.globalAlpha = frames / 6 * 0.5;
+      flashCtx.fillStyle = '#ff3b3b';
+      flashCtx.beginPath(); flashCtx.arc(x - offset, y, 90, 0, Math.PI * 2); flashCtx.fill();
+      flashCtx.fillStyle = '#3bffb0';
+      flashCtx.beginPath(); flashCtx.arc(x, y, 90, 0, Math.PI * 2); flashCtx.fill();
+      flashCtx.fillStyle = '#3b9dff';
+      flashCtx.beginPath(); flashCtx.arc(x + offset, y, 90, 0, Math.PI * 2); flashCtx.fill();
+      frames--;
+      if (frames > 0) requestAnimationFrame(step);
+      else flashCtx.clearRect(0, 0, W, H);
+    }
+    step();
+  }
+
+  function triggerBurst(x, y) {
+    const colors = activeColors();
+    const color = hexToRgbString(colors[Math.floor(Math.random() * colors.length)]);
+    bursts.push(new Burst(x, y, color));
+    const sparkCount = CONFIG.sparkCountByQuality[currentTier];
+    for (let i = 0; i < sparkCount; i++) {
+      const c = hexToRgbString(colors[Math.floor(Math.random() * colors.length)]);
+      sparks.push(new Spark(x, y, c));
+    }
+    triggerChromaticFlash(x, y);
+    cursorRing.style.transform = 'scale(1.8)';
+    cursorRing.style.opacity = '0.9';
+    setTimeout(() => {
+      cursorRing.style.transform = 'scale(1)';
+      cursorRing.style.opacity = '0.55';
+    }, 180);
+  }
+
+  window.addEventListener('mousemove', (e) => setPointer(e.clientX, e.clientY));
+  window.addEventListener('mouseleave', () => { pointer.active = false; cursorEl.style.opacity = '0'; });
+  window.addEventListener('mouseenter', () => { cursorEl.style.opacity = '1'; });
+  window.addEventListener('mousedown', (e) => triggerBurst(e.clientX, e.clientY));
+  window.addEventListener('touchmove', (e) => {
+    if (e.touches.length) setPointer(e.touches[0].clientX, e.touches[0].clientY);
+  }, { passive: true });
+  window.addEventListener('touchend', () => { pointer.active = false; });
+  window.addEventListener('touchstart', (e) => {
+    if (e.touches.length) {
+      const t = e.touches[0];
+      setPointer(t.clientX, t.clientY);
+      triggerBurst(t.clientX, t.clientY);
+    }
+  }, { passive: true });
+
+  document.getElementById('densityBtn').addEventListener('click', () => {
+    CONFIG.densityIndex = (CONFIG.densityIndex + 1) % CONFIG.densityLevels.length;
+    initParticles();
+  });
+
+  const modeBtn = document.getElementById('modeBtn');
+  const arrowPath = document.getElementById('arrowPath');
+  modeBtn.addEventListener('click', () => {
+    mode *= -1;
+    modeBtn.classList.toggle('on', mode === -1);
+    arrowPath.setAttribute('d', mode === 1 ? 'M12 4v16M6 9l6-5 6 5' : 'M12 20V4M18 15l-6 5-6-5');
+  });
+
+  const starsBtn = document.getElementById('starsBtn');
+  starsBtn.classList.add('on');
+  starsBtn.addEventListener('click', () => {
+    starsOn = !starsOn;
+    starsBtn.classList.toggle('on', starsOn);
+  });
+
+  const trailBtn = document.getElementById('trailBtn');
+  trailBtn.classList.add('on');
+  trailBtn.addEventListener('click', () => {
+    cursorTrailOn = !cursorTrailOn;
+    trailBtn.classList.toggle('on', cursorTrailOn);
+    if (!cursorTrailOn) cursorTrail = [];
+  });
+
+  const qualityBtn = document.getElementById('qualityBtn');
+  const QUALITY_CYCLE = ['auto', 'high', 'medium', 'low'];
+  qualityBtn.addEventListener('click', () => {
+    const idx = QUALITY_CYCLE.indexOf(CONFIG.quality);
+    CONFIG.quality = QUALITY_CYCLE[(idx + 1) % QUALITY_CYCLE.length];
+    qualityBtn.title = 'Cycle quality (' + CONFIG.quality[0].toUpperCase() + CONFIG.quality.slice(1) + ')';
+    qualityBtn.classList.toggle('on', CONFIG.quality !== 'auto');
+    if (CONFIG.quality !== 'auto') {
+      applyTier(CONFIG.quality, { announce: true, force: true });
+    } else {
+      qualityNote.textContent = 'auto quality';
+      qualityNote.classList.add('show');
+      clearTimeout(applyTier._t);
+      applyTier._t = setTimeout(() => qualityNote.classList.remove('show'), 1800);
+      perf.samples = []; perf.cooldown = 30;
+    }
+  });
+
+  const pauseBtn = document.getElementById('pauseBtn');
+  pauseBtn.addEventListener('click', () => {
+    paused = !paused;
+    pauseBtn.innerHTML = paused
+      ? '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5l12 7-12 7V5z"/></svg>'
+      : '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
+    if (!paused) start();
+  });
+
+  window.addEventListener('resize', () => {
+    resize();
+    buildVignette();
+    initParticles();
+    initBgStars();
+  });
+
+  // ---- Init ----
+  (function seedInitialTier() {
+    const cores = navigator.hardwareConcurrency || 4;
+    if (isTouch && cores <= 4) currentTier = 'medium';
+    if (cores <= 2) currentTier = 'low';
+  })();
+
+  resize();
+  setTheme('ember');
+  initParticles();
+  initStars();
+  initBgStars();
+
+  if (prefersReducedMotion) {
+    CONFIG.densityIndex = 3;
+    starsOn = false;
+    cursorTrailOn = false;
+    starsBtn.classList.remove('on');
+    trailBtn.classList.remove('on');
+    initParticles();
+  }
+  if (isTouch) cursorEl.style.display = 'none';
+  start();
+
+  setTimeout(() => { hint.style.opacity = '0'; }, 4500);
+})();
+</script>
+</body>
+</html>
