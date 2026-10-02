@@ -6,6 +6,8 @@ An interactive particle field built with **vanilla JavaScript and HTML Canvas**,
 
 [Live Demo](https://hosseinb1111.github.io/ember-drift/)
 
+![Ember Drift Preview](./assets/preview.png)
+
 ---
 
 ## ✨ Overview
@@ -16,7 +18,7 @@ An interactive particle field built with **vanilla JavaScript and HTML Canvas**,
 
 The particle movement is driven by a custom **Perlin-noise-based vector field**, while mouse and touch interaction locally disturb the flow.
 
-The result is an interactive background that continuously changes without following a predefined animation path.
+The result is an interactive visual field that continuously evolves rather than following a predefined animation path.
 
 ---
 
@@ -58,7 +60,7 @@ Available palette colors include:
 * Aurora
 * Violet
 
-Multiple colors can be enabled at the same time to create different particle mixes.
+Multiple colors can be enabled simultaneously to create different particle combinations.
 
 ### Binary
 
@@ -82,15 +84,15 @@ The theme also changes:
 
 ## 🖱️ Interaction
 
-The particle field responds to the user's pointer.
+The particle field responds directly to pointer input.
 
 ### Move
 
 Moving the cursor through the field changes the local particle flow.
 
-### Click
+### Click / Tap
 
-Clicking creates a radial burst that pushes particles outward and produces a short chromatic flash.
+Clicking or tapping creates a radial burst that pushes particles outward and produces a short chromatic flash.
 
 ### Attract / Repel
 
@@ -98,7 +100,7 @@ The interaction mode can be switched between attraction and repulsion.
 
 ### Touch
 
-On touch devices, tapping and dragging can interact with the field without requiring a mouse.
+On touch devices, tapping and dragging interact with the field without requiring a mouse.
 
 ---
 
@@ -264,10 +266,13 @@ The project is intentionally lightweight:
 
 ```text
 ember-drift/
+├── assets/
+│   └── preview.png
+├── LICENSE
 └── index.html
 ```
 
-The application is contained in a single HTML file with:
+The application itself is contained in a single HTML file with:
 
 * markup
 * styling
@@ -287,7 +292,7 @@ No installation is required.
 Clone the repository:
 
 ```bash
-git clone https://github.com/YOUR-USERNAME/ember-drift.git
+git clone https://github.com/Hosseinb1111/ember-drift.git
 cd ember-drift
 ```
 
@@ -347,7 +352,7 @@ This makes adding another visual theme relatively straightforward.
 
 This project started as a visual experiment rather than a traditional application.
 
-The interesting part for me was exploring how relatively simple browser primitives can produce complex motion:
+The interesting part was exploring how relatively simple browser primitives can produce complex motion:
 
 ```text
 Noise
@@ -386,18 +391,24 @@ It is intentionally small and self-contained.
 
 ## 📸 Preview
 
-Add a screenshot or short GIF here:
-(./assets/preview.png)
-A short screen recording of the interaction would also work particularly well for this project.
+![Ember Drift Preview](./assets/preview.png)
+
+The preview above shows the main Ember theme and particle field.
+
+The live demo provides the full interactive experience, including cursor interaction, bursts, themes, palette controls, and rendering controls.
 
 ---
 
-## 📄 License
+## 📜 License
 
-Add your preferred license here, for example:
+This project is licensed under the **Apache License 2.0**.
 
-```text
-MIT License
-```
+See the [LICENSE](./LICENSE) file for the full license text.
 
-or replace this section with the license you choose.
+---
+
+<div align="center">
+
+**[Live Demo](https://hosseinb1111.github.io/ember-drift/)** · **[GitHub Repository](https://github.com/Hosseinb1111/ember-drift)**
+
+</div>
